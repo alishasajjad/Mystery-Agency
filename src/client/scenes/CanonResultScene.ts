@@ -1,6 +1,7 @@
 import { Scene, Math as PhaserMath } from 'phaser';
 import { Theory } from '../../shared/types';
 import { GlassCard, PremiumButton, Badge, SceneTransitions, ToastManager, COLORS } from '../components/UIComponents';
+import { chapterNumber } from '../phase';
 
 export class CanonResultScene extends Scene {
   constructor() {
@@ -69,9 +70,11 @@ export class CanonResultScene extends Scene {
       { borderColor: COLORS.accent, glow: true }
     );
 
-    // Chapter label so the canon result is clearly tied to its chapter.
-    this.add.text(512, 128, `📖 CHAPTER ${theory.chapter_id.replace('chapter', '')}`, {
+    // Chapter label — uses the canon theory's OWN stored chapter (the chapter it was
+    // submitted for), not the currently active chapter.
+    this.add.text(512, 128, `📖 CHAPTER ${chapterNumber(theory.chapter_id)}`, {
       fontSize: '14px', color: '#38bdf8', fontStyle: 'bold',
+      backgroundColor: '#0b1220', padding: { x: 10, y: 3 },
     }).setOrigin(0.5);
 
     // Theory card with enhanced styling

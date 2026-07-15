@@ -1,259 +1,119 @@
 # 🔍 Mystery Agency
 
-A collaborative, community-driven detective game built on **Reddit's Devvit** platform. Players examine evidence, submit theories about a crime, vote on the most compelling ones, and the top theory becomes **canon** — steering the story forward. Detectives earn XP, climb ranks, and unlock badges.
+A collaborative detective game for Reddit, built on the **Devvit** platform. Players examine evidence, submit theories about a crime, vote on the most convincing ones, and the community's top pick becomes **canon** — steering a ten-chapter mystery. Detectives earn XP, climb ranks, and unlock badges along the way.
 
-![Devvit](https://img.shields.io/badge/Devvit-0.13.7-FF4500)
-![Phaser](https://img.shields.io/badge/Phaser-4.2.0-2ecc71)
-![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6)
-![Hono](https://img.shields.io/badge/Hono-4.12-E36002)
+![Devvit](https://img.shields.io/badge/Devvit-0.13-FF4500)
+![Phaser](https://img.shields.io/badge/Phaser-4-2ecc71)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6)
+![Hono](https://img.shields.io/badge/Hono-4-E36002)
 ![License](https://img.shields.io/badge/License-BSD--3--Clause-orange)
 
-> **Status:** deployable — passes `type-check`, `lint`, and `build`; core loop, moderator tools, and data layer verified in code. See [Known Limitations](#-known-limitations).
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Gameplay](#gameplay)
+- [Architecture](#architecture)
+- [Folder Structure](#folder-structure)
+- [Tech Stack](#tech-stack)
+- [Installation](#installation)
+- [Environment Variables](#environment-variables)
+- [Development](#development)
+- [Deployment](#deployment)
+- [Admin Guide](#admin-guide)
+- [API Overview](#api-overview)
+- [Privacy](#privacy)
+- [Terms](#terms)
+- [License](#license)
 
 ---
 
-## 📖 Table of Contents
+## Overview
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Gameplay Flow](#-gameplay-flow)
-- [Architecture](#-architecture)
-- [Folder Structure](#-folder-structure)
-- [Frontend Architecture](#-frontend-architecture)
-- [Backend Architecture](#-backend-architecture)
-- [Redis Architecture](#-redis-architecture)
-- [API Documentation](#-api-documentation)
-- [Authentication & Authorization](#-authentication--authorization)
-- [Admin Tools](#-admin-tools)
-- [Setup](#-setup)
-- [Local Development](#-local-development)
-- [Deployment](#-deployment)
-- [Environment Variables](#-environment-variables)
-- [Testing & Verification](#-testing--verification)
-- [Performance Optimizations](#-performance-optimizations)
-- [Troubleshooting](#-troubleshooting)
-- [Known Limitations](#-known-limitations)
-- [Roadmap](#-roadmap)
-- [Privacy & Terms](#-privacy--terms)
-- [License](#-license)
+Mystery Agency runs as a **Devvit Web app** inside a Reddit post. The feed shows a lightweight branded splash; tapping **Start Investigation** expands into the full **Phaser** game. A **Hono** server backs the game over a small REST API, with all state persisted in **Devvit-managed Redis**.
 
----
+The game is designed to run itself: phases progress automatically on a 12-hour schedule, while subreddit moderators keep full manual control when they want it.
 
-## 🎯 Overview
+For a deeper walkthrough of the story, mechanics, and moderator tools, see **[GAME_OVERVIEW.md](GAME_OVERVIEW.md)**.
 
-Mystery Agency runs as a **Devvit Web app** inside a Reddit post. The feed shows a lightweight branded **splash** (inline view); tapping **Start Investigation** expands into the full **Phaser** game (expanded view). A **Hono** server (Node 22, serverless) backs the game over a small REST API, persisting everything in **Devvit-managed Redis**.
+## Features
 
-- **Engine:** Phaser 4 · **Language:** TypeScript · **Bundler:** Vite
-- **Server:** Hono on `@devvit/web/server` · **DB:** Redis (hashes + sorted sets)
-- **Identity/authz:** Reddit account via Devvit `context`; moderator checks server-side
+- **Collaborative mysteries** — read evidence, submit theories, and vote as a community across a **10-chapter campaign**.
+- **One theory per chapter** — each player commits a single theory per chapter, keeping voting focused and fair.
+- **Community canon** — the top-voted theory becomes canon and drives the next chapter.
+- **Hybrid phase engine** — automatic 12-hour progression (submission → voting → canon → next chapter) with full moderator override (pause / resume / skip / manual).
+- **Progression** — XP, six detective ranks, five achievement badges, and three leaderboards (XP, Canon, Votes).
+- **Clarity** — live phase + countdown banners, phase-change notifications, and a chapter badge on every theory.
+- **Polished UI** — a detective-themed design system with responsive layouts for desktop, mobile, and the Reddit iframe.
 
----
+## Gameplay
 
-## ✨ Features
+1. **Investigate** the chapter's evidence and clues.
+2. **Submit** one theory (type + text + tagged evidence).
+3. **Vote** when the voting phase opens (auto every 12h, or moderator-triggered).
+4. The **top-voted theory becomes canon** and shapes the next chapter.
+5. Repeat across all ten chapters to the finale.
 
-**Investigation & Theories**
-- Multi-chapter mysteries with typed clues (evidence / dialogue / document)
-- Submit theories (≤280 chars) tagged to real evidence; four theory types (suspect / motive / method / prediction)
-- Phase-based loop: **submission → voting → canon**
-- Community upvoting with rank-based daily limits and duplicate/self-vote prevention
-- Top theory becomes **canon** and is celebrated with a confetti screen
+XP is earned for submitting, voting, receiving votes, and canonization; ranks unlock higher limits; badges reward milestones. Full details in **[GAME_OVERVIEW.md](GAME_OVERVIEW.md)**.
 
-**Progression**
-- XP for submitting (+10), voting (+2), votes received (+5), canonization (+100), daily login (+5), streak bonuses
-- 6 detective ranks (Rookie → Agency Director) that gate vote/theory limits
-- 5 achievement badges driven by real stats (`BADGE_META` single source of truth)
-- Three leaderboards: XP, canon rate, votes received
-
-**Community & UI**
-- Podium leaderboards with current-player highlight
-- Detective-themed glassmorphism UI, consistent depth/layering, real hover states
-- Mobile-capable native text input, masked drag/wheel scrolling
-- Moderator control panel (voting phase, canon, chapter progression, reset)
-
----
-
-## 🎮 Gameplay Flow
-
-```mermaid
-flowchart TD
-    A[Reddit feed: Splash] -->|Start Investigation| B[MainMenu]
-    B --> C[EvidenceScene: chapter + clues]
-    C -->|Submit Theory| D[TheoryScene: type + evidence + text]
-    D --> E[ResultScene: +XP]
-    E --> F[TheoryListScene: community theories]
-    C -->|View Theories| F
-    F -->|voting phase| G[Upvote theories]
-    G -->|moderator: auto-select canon| H[CanonResultScene 🎉]
-    H -->|moderator: advance chapter| C
-    B --> I[Profile / Leaderboard / Settings]
-```
-
-Phases are controlled by a moderator via the Admin panel: open submissions → open voting → select canon → advance chapter (which reopens submissions on the next chapter). In-game onboarding (**How to Play** on the menu, **?** on the evidence screen) and a "What happens next?" screen after submitting keep the loop self-explanatory.
-
-### Theory · Voting · Chapter Lifecycles
-
-```mermaid
-stateDiagram-v2
-    [*] --> Submission: install / advance (auto-seeds submission phase)
-    Submission --> Voting: moderator opens voting
-    Voting --> Canon: moderator selects canon (manual, or auto = top-voted)
-    Canon --> Submission: moderator advances to next chapter
-    Voting --> Closed: moderator closes voting
-    Closed --> Submission: moderator reopens / advances
-```
-
-- **Theory lifecycle:** submitted (submission phase, +10 XP) → upvoted (voting phase, author +5 XP/vote) → possibly **canon** (+100 XP, shapes the chapter).
-- **Voting lifecycle:** opens/closes only by moderator; rank-based daily vote limits; no self-vote, no double-vote, no voting canon theories.
-- **Chapter lifecycle:** 10 embedded chapters (*The Red Fox Files*, Books One & Two, ending in a predict-the-culprit finale). Phases **auto-advance every 12 hours** (submission → voting → canon reveal → next chapter); moderators can override, pause/resume, or skip at any time. Advancing past the last chapter is blocked (no dead-end).
-- **One theory per chapter:** each player may submit a single theory per chapter (enforced server-side; the submit button reflects it). This keeps voting focused and fair.
-- **Chapter labels everywhere:** every theory shows a `📖 CHAPTER N` badge in the list and canon screens so cross-chapter theories are never confused.
-- **Phase notifications:** when the phase or chapter changes, players see an in-game toast (e.g. "🗳️ Voting is now OPEN"), plus a live phase + countdown banner on the menu, evidence, and theory screens.
-
----
-
-## 🏗 Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
     subgraph Client["Frontend — Phaser (iframe)"]
-      SP[splash.html/ts] -->|requestExpandedMode| GM[game.ts + 12 scenes]
+      SP[splash] -->|requestExpandedMode| GM[game + scenes]
       GM --> AC[ApiClient]
     end
     subgraph Server["Backend — Hono"]
-      API["/api/* routes"]
-      INT["/internal/* menu+triggers"]
-      CORE["services: redis · xp · auth · story-init · post"]
-      API --> CORE
-      INT --> CORE
+      RT["routes: api · theories · menu · triggers"]
+      SVC["services: redis · xp · auth · phase · story · post"]
+      RT --> SVC
     end
-    AC -->|fetch JSON| API
-    CORE -->|context/reddit| DEVVIT[(Devvit runtime)]
-    CORE --> REDIS[(Redis)]
+    AC -->|fetch JSON /api/*| RT
+    SVC -->|context · reddit| Devvit[(Devvit runtime)]
+    SVC --> Redis[(Redis)]
 ```
 
-The Devvit-required layout `src/{client,server,shared}` maps to the layers: **Frontend** = `client`, **Backend/Devvit** = `server`, **Shared types** = `shared`.
+- **Frontend** (`src/client`) — Phaser scenes + a shared UI component system; talks to the server only via `fetch('/api/...')`.
+- **Backend** (`src/server`) — a Hono app with `routes/` (HTTP transport, incl. Devvit menu/trigger endpoints) and `services/` (game logic: Redis access, XP/ranks/badges, auth, phase engine, story).
+- **Shared** (`src/shared`) — domain types and constants used by both sides.
+- **Data** — Redis hashes for users/chapters/theories and sorted sets for memberships and leaderboards (Devvit's Redis has no set commands, so memberships are timestamp-scored sorted sets).
 
----
-
-## 📁 Folder Structure
+## Folder Structure
 
 ```
 mystery-agency/
 ├── src/
-│   ├── client/                     # FRONTEND (Phaser, iframe)
-│   │   ├── components/UIComponents.ts   # COLORS, DEPTH, buttons, cards, toast, HUD, transitions
-│   │   ├── scenes/                      # 12 scenes (Boot → … → Settings)
-│   │   ├── api.ts                       # typed API client (no client-side identity)
-│   │   ├── game.ts / game.html / game.css     # expanded game entry (Scale.FIT)
-│   │   └── splash.ts / splash.html / splash.css  # inline feed entry (branded)
-│   ├── server/                     # BACKEND (Hono, serverless)
+│   ├── client/                     # Frontend (Phaser)
+│   │   ├── components/UIComponents.ts   # design system (buttons, cards, badges, toast, HUD, scroll, modal)
+│   │   ├── scenes/                      # Boot, Preloader, MainMenu, Evidence, Theory, Result,
+│   │   │                                # TheoryList, CanonResult, Leaderboard, Profile, Admin, Settings
+│   │   ├── phase.ts                     # phase formatting + notifications + chapter helpers
+│   │   ├── api.ts                       # typed API client
+│   │   ├── game.* / splash.*            # expanded game + inline feed entrypoints
+│   ├── server/                     # Backend (Hono)
 │   │   ├── routes/                      # api.ts, theories.ts, menu.ts, triggers.ts
-│   │   ├── services/                    # redis, xp, auth, story-init, post (game logic)
+│   │   ├── services/                    # redis, xp, auth, phase, story-init, post
 │   │   └── index.ts                     # Hono composition + serve()
-│   └── shared/                     # SHARED TYPES
-│       ├── types.ts                     # domain models (type aliases)
-│       └── constants.ts                 # ranks, XP, badges, BADGE_META, REDIS_KEYS
-├── public/snoo.png                 # ASSETS
-├── docs/                           # GAMEPLAY_GUIDE, ADMIN_GUIDE, DEPLOYMENT_GUIDE, PROJECT_ARCHITECTURE, FINAL_RELEASE_REPORT
-├── tools/tsconfig.*.json           # CONFIG (project-references build)
-├── devvit.json · vite.config.ts · eslint.config.js · tsconfig.json · .prettierrc
-├── AGENTS.md · LICENSE · README.md
+│   └── shared/                     # Shared types & constants
+├── public/                         # static assets (snoo.png)
+├── tools/                          # TypeScript project-reference configs
+├── devvit.json · vite.config.ts · eslint.config.js · tsconfig.json
+├── README.md · GAME_OVERVIEW.md · privacy.md · terms.md · LICENSE
 ```
 
----
+## Tech Stack
 
-## 🖥 Frontend Architecture
+- **Engine:** Phaser 4 · **Language:** TypeScript · **Bundler:** Vite
+- **Server:** Hono on `@devvit/web/server` (Node 22 serverless)
+- **Database:** Reddit Devvit-managed Redis
+- **Platform:** Reddit Developer Platform (Devvit)
 
-- **Bootstrap** (`game.ts`): Phaser `Game` at a fixed **1024×768** design resolution, `Scale.FIT` + `CENTER_BOTH` (letterboxes cleanly on any Reddit web-view).
-- **Scenes** (`scenes/`): `Boot → Preloader → MainMenu → EvidenceScene → TheoryScene → ResultScene → TheoryListScene → CanonResultScene → LeaderboardScene → ProfileScene → AdminScene → SettingsScene`. Data-driven scenes show a spinner, `await ApiClient`, then render.
-- **Design system** (`components/UIComponents.ts`): `COLORS`, `DEPTH` (`CONTENT 0 · HUD 1000 · MODAL 2000 · TOAST 10000`), `PremiumButton`, `GlassCard`, `Badge`, `ToastManager`, `SceneTransitions`, `HUD`, `ScrollView` (reusable masked scroll — wheel/drag/buttons/bounds), `InfoModal` (onboarding dialog), and shared `HOW_TO_PLAY_STEPS` copy.
-- **Layout integrity:** cards size to their content and text columns are bounded inside cards; long or overflowing content lives in a masked `ScrollView`, so nothing spills outside its container at any viewport.
-- **Text input:** the theory editor is a **native DOM `<textarea>`** overlaid on the canvas (works with mobile keyboards; positioned from the canvas rect and re-aligned on resize).
-- **Lifecycle/cleanup:** resources Phaser doesn't auto-free (DOM elements, `make.graphics` masks, DOM timers, the static HUD) are released on the Phaser **`shutdown`/`destroy` events** (the documented cleanup hook), guaranteeing no orphaned UI or leaks.
+## Installation
 
-## ⚙ Backend Architecture
-
-- **`index.ts`** composes Hono: `/api/*` (game) and `/internal/*` (Devvit menu/triggers), served on the Devvit port.
-- **`routes/api.ts`** — profile, daily-login, chapter, leaderboard, and moderator-gated voting-phase / chapter-advance / set-chapter / reset.
-- **`routes/theories.ts`** — list, submit, vote, and moderator-gated canon / auto-canon, with full input validation.
-- **`services/` (game logic)** — `redis.ts` (typed data access), `xp.ts` (ranks/XP/badges/streaks/login), `auth.ts` (identity + mod check), `phase.ts` (hybrid auto/manual phase engine + canonization), `story-init.ts` (10-chapter seed/reset), `post.ts` (create post).
-
-## 🗄 Redis Architecture
-
-Devvit's Redis client supports **strings, hashes, and sorted sets only** (no set commands), so membership collections use sorted sets scored by timestamp.
-
-| Key | Type | Purpose |
-|-----|------|---------|
-| `user:{id}` | hash | profile: xp, rank, counters, badges, login/vote dates |
-| `chapter:{id}` | hash | title, content, clues (JSON), canon text |
-| `story:current_chapter` | string | active chapter id |
-| `theory:{id}` | hash | theory record |
-| `theories:chapter:{id}` | zset | theory ids for a chapter (score = createdAt) |
-| `theories:canon` · `theories:trending` | zset | canon ids · trending by votes |
-| `votes:theory:{id}` | zset | voter ids (dedupe via `zScore`) |
-| `voting:active` · `voting:phase` · `voting:ends_at` | string | phase state |
-| `leaderboard:xp` · `leaderboard:canon_rate` · `leaderboard:votes_received` | zset | rankings |
-
----
-
-## 🔌 API Documentation
-
-Base path `/api`. Identity comes from Devvit `context.userId` (never a request body/header).
-
-| Method | Route | Purpose | Auth |
-|--------|-------|---------|------|
-| GET  | `/api/profile` | Get/auto-create profile; award once-per-day login XP | Authenticated |
-| POST | `/api/daily-login` | Claim daily bonus (idempotent per day) | Authenticated |
-| GET  | `/api/chapter` | Current chapter (self-heals if uninitialized) | Authenticated |
-| GET  | `/api/leaderboard?type=xp\|canon_rate\|votes_received` | Rankings | Authenticated |
-| GET  | `/api/admin/status` | Caller's moderator status + live phase/chapter/countdown | Authenticated |
-| POST | `/api/phase/auto` | Pause/resume automatic 12h progression | **Moderator** |
-| POST | `/api/phase/skip` | Immediately trigger the next phase transition | **Moderator** |
-| GET  | `/api/theories` | Theories for current chapter + voting phase | Authenticated |
-| POST | `/api/theories` | Submit a validated theory | Authenticated |
-| POST | `/api/theories/:id/vote` | Upvote a theory | Authenticated |
-| POST | `/api/theories/:id/canon` | Mark a theory canon | **Moderator** |
-| POST | `/api/theories/auto-canon` | Canonize the top-voted theory | **Moderator** |
-| POST | `/api/voting-phase` | Set `submission`/`voting`/`closed` | **Moderator** |
-| POST | `/api/chapter/advance` | Advance to the next chapter | **Moderator** |
-| POST | `/api/set-chapter` | Jump to a specific chapter | **Moderator** |
-| POST | `/api/admin/reset` | Reset story to chapter 1 | **Moderator** |
-
-Internal (Devvit): `POST /internal/menu/post-create`, `POST /internal/triggers/on-app-install`.
-
----
-
-## 🔐 Authentication & Authorization
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Hono server
-    participant R as Reddit/Devvit
-    C->>S: fetch /api/... (Reddit-authenticated request)
-    S->>S: getUserId() = context.userId  (trusted, non-spoofable)
-    alt moderator route
-      S->>R: getCurrentUser().getModPermissionsForSubreddit(subreddit)
-      R-->>S: permissions
-      S-->>C: 403 if not a moderator
-    end
-    S-->>C: JSON result
-```
-
-- **Identity:** always `context.userId`. The client sends no identity — nothing to spoof.
-- **Authorization:** every admin/mutation route calls `isModerator()` (`src/server/services/auth.ts`); non-mods get `403`. The client reveals the **🛠️ ADMIN** button only after `GET /api/admin/status` confirms real moderator status.
-
----
-
-## 🛠 Admin Tools
-
-Real subreddit moderators automatically see a **🛠️ ADMIN** button (top-right of the Main Menu) — the client checks `GET /api/admin/status`. The panel shows a **live status line** (chapter, phase, countdown, automation state) and offers (all server-enforced): **manual override** (Open Submissions / Open Voting / Close Voting), **automation** (Pause/Resume auto-progression, Skip Phase, Auto-Select Canon), **chapter** (Advance), and **Reset Game** (in-scene confirm). Feedback uses in-scene toasts (no blocked `alert/confirm`). See [`docs/ADMIN_GUIDE.md`](docs/ADMIN_GUIDE.md).
-
----
-
-## 🚀 Setup
-
-**Prerequisites:** Node.js ≥ 22.2.0, a Reddit account with Developer access, and the Devvit CLI (installed via dependencies).
+Prerequisites: **Node.js ≥ 22.2.0**, a Reddit account with Developer access, and moderator access to a subreddit for testing.
 
 ```bash
 git clone <repository-url>
@@ -262,9 +122,13 @@ npm install
 npm run login        # authenticate the Devvit CLI with Reddit
 ```
 
-Set your dev subreddit in `devvit.json` (`dev.subreddit`).
+Set your development subreddit in `devvit.json` (`dev.subreddit`) — use a subreddit you moderate so the Admin panel is available.
 
-## 💻 Local Development
+## Environment Variables
+
+**None required.** Devvit manages all configuration through `devvit.json` (entrypoints, menu, triggers, dev subreddit). A local `.env` is git-ignored and not needed to run the app.
+
+## Development
 
 ```bash
 npm run dev          # devvit playtest on your dev subreddit (live reload)
@@ -274,102 +138,59 @@ npm run build        # vite build → dist/client + dist/server
 npm run prettier     # format
 ```
 
-Workflow: edit → `npm run dev` (playtest in-subreddit) → `type-check`/`lint` → iterate.
+**Conventions:** TypeScript is `strict` (no implicit `any`, no unused locals); prefer `type` aliases and named exports; the game uses Devvit-web APIs only (`navigateTo` / `requestExpandedMode` on the client, `context` / `reddit` / `redis` on the server) — no `window.alert`/`confirm` inside the iframe.
 
-## 📦 Deployment
+## Deployment
 
 ```bash
 npm run deploy       # type-check && lint && devvit upload
-npm run launch       # deploy && devvit publish  (submits for review)
+npm run launch       # deploy && devvit publish  (submit for Reddit review)
 ```
 
-`deploy` gates on a clean `type-check` and `lint` before uploading. `launch` additionally publishes for Reddit review. The `onAppInstall` trigger seeds the story (chapters + submission phase) on first install.
+On install, the `onAppInstall` trigger seeds the story (chapters + opening submission phase). Moderators create a game post from the subreddit menu ("Create a new Mystery Agency post"). After Reddit review, the app can be installed on any subreddit from the Developer portal.
 
-## 🔧 Environment Variables
+## Admin Guide
 
-**None required.** Devvit manages configuration through `devvit.json` (entrypoints, menu, triggers, dev subreddit). A local `.env` is git-ignored and not needed to run the app.
+Moderators of the host subreddit automatically see a **🛠️ ADMIN** button on the Main Menu (moderator status is verified server-side). The panel shows the live chapter/phase/countdown and provides:
 
----
+- **Manual override** — Open Submissions / Open Voting / Close Voting.
+- **Automation** — Pause / Resume the 12-hour auto-progression, Skip Phase, Auto-Select Canon.
+- **Chapter & game** — Advance Chapter, Reset Game.
 
-## 🧪 Testing & Verification
+Phases auto-advance every 12 hours by default; moderator actions override the schedule and automation resumes from the phase you set. See **[GAME_OVERVIEW.md](GAME_OVERVIEW.md#moderator-guide)**.
 
-Current verification is via the toolchain plus evidence-based code review (see `docs/`):
+## API Overview
 
-| Check | Command | Result |
-|-------|---------|--------|
-| Type-check | `npm run type-check` | ✅ 0 errors |
-| Lint | `npm run lint` | ✅ 0 errors |
-| Build | `npm run build` | ✅ success (client + server) |
-| Debug logging | `grep -rn console.log src` | ✅ 0 |
+Base path `/api`. Identity comes from Devvit's request `context.userId` — the client never sends a user id. Moderator-only routes are enforced server-side (403 otherwise).
 
-> There is **no automated test suite yet** (see Roadmap). Behavior is validated by the gates above and by tracing the loop against the code (`docs/FINAL_RELEASE_REPORT.md`).
+| Method | Route | Purpose | Access |
+|--------|-------|---------|--------|
+| GET | `/api/profile` | Player profile (auto-creates; once/day login XP) | Authenticated |
+| POST | `/api/daily-login` | Claim daily bonus | Authenticated |
+| GET | `/api/chapter` | Current chapter | Authenticated |
+| GET | `/api/theories` | Theories for the current chapter + phase + submitted flag | Authenticated |
+| POST | `/api/theories` | Submit a theory (one per chapter) | Authenticated |
+| POST | `/api/theories/:id/vote` | Vote for a theory | Authenticated |
+| GET | `/api/leaderboard?type=xp\|canon_rate\|votes_received` | Rankings | Authenticated |
+| GET | `/api/admin/status` | Moderator status + live phase/chapter | Authenticated |
+| POST | `/api/theories/:id/canon` · `/api/theories/auto-canon` | Set canon | Moderator |
+| POST | `/api/voting-phase` · `/api/phase/auto` · `/api/phase/skip` | Phase control | Moderator |
+| POST | `/api/chapter/advance` · `/api/set-chapter` · `/api/admin/reset` | Chapter / reset | Moderator |
 
-## ⚡ Performance Optimizations
+## Privacy
 
-- **Fixed-resolution `Scale.FIT`** — one design space, no per-scene responsive recomputation.
-- **Sorted-set membership** — O(log n) dedupe/ordering instead of scans.
-- **Event-based scene teardown** — DOM elements, masks, timers, and the HUD are freed deterministically; Phaser plugins auto-free tweens/timers/input/display objects.
-- **Masked, container-based scrolling** — one container per row moved as a unit; off-screen rows clipped.
-- **Lean bundle** — no debug logging; dead components/scenes/assets removed.
+The game stores only Reddit-account-linked gameplay data (username, XP, rank, badges, theories, votes) in Devvit-managed Redis. No emails, passwords, payment data, or third-party tracking. See **[privacy.md](privacy.md)**.
 
-## 🐞 Troubleshooting
+> For the Devvit App Directory, publish `privacy.md` and `terms.md` as public URLs (e.g. via GitHub Pages) and add them to your app listing.
 
-| Symptom | Fix |
-|---|---|
-| `npm run deploy` fails at lint | Run `npm run lint`; the script is `eslint src` (cross-platform on Windows `cmd.exe`). |
-| Admin actions return 403 | You must be a **moderator** of the subreddit; enforcement is server-side. |
-| No chapter loads | `GET /api/chapter` self-heals via `initializeStory`; otherwise confirm the app installed (trigger seeds data). |
-| Theory submission "closed" | A moderator must set the phase to **submission** (Admin → Open Submissions). |
-| Voting disabled | Phase must be **voting** (Admin → Open Voting); you can't vote for your own or an already-canon theory. |
-| Text input not visible on mobile | It's a native `<textarea>` positioned over the canvas; tap it to focus and raise the keyboard. |
+## Terms
 
-## ⚠ Known Limitations
+Fair-play rules and usage terms are in **[terms.md](terms.md)**. By playing you agree not to cheat, spam, or abuse the game, and to follow Reddit's content policy.
 
-- **No automated tests** — validated by type-check/lint/build + code tracing.
-- **Non-atomic writes** — vote/submit use sequential Redis calls (no `watch`/multi transaction); safe under normal load, but not hardened for high contention.
-- **No rate limiting** on public routes.
-- **Auto-progression is lazy** (evaluated on request, not a background cron): phases advance when a player/admin loads the game after the 12h timer elapses. On a completely idle game, the transition fires on the next visit. A tiny concurrency window at the exact moment of transition is guarded but not fully transactional.
-- **Audio toggles are cosmetic** — Settings persists preferences but no sound system exists yet.
-
-## 🗺 Roadmap
-
-- [ ] Automated test suite (vitest) for `xp.ts` and route validation
-- [ ] Atomic vote/submit via Redis `watch`/multi
-- [ ] Rate limiting on public routes
-- [ ] Scheduler-driven automatic phase transitions
-- [ ] More chapters and story branching on canon choices
-- [ ] Real audio for the Settings toggles
-- [ ] Real-time notifications on canon selection
-
----
-
-## ✅ Production Checklist
-
-- [x] `type-check`, `lint`, `build` pass (0 errors); deploy gate green
-- [x] No debug logging, dead code, dead scenes, or unused assets
-- [x] Server-trusted identity + moderator-gated admin routes
-- [x] Redis uses supported structures (hashes + sorted sets); story self-seeds on install
-- [x] No orphaned UI / DOM elements / listener leaks (event-wired cleanup)
-- [x] Layout integrity (contained cards + masked scrolling); consistent depth/hover
-- [x] In-game onboarding + "what happens next" clarity
-- [ ] Live Devvit playtest confirmed (needs `npm run login`)
-- [ ] Automated test suite · atomic writes · rate limiting
-
-**Completion ~96% · Production readiness 91/100 · Critical issues 0.** Full evidence in [`docs/FINAL_RELEASE_REPORT.md`](docs/FINAL_RELEASE_REPORT.md).
-
-## 🔒 Privacy & Terms
-
-- **Privacy Policy:** [`privacy.md`](privacy.md)
-- **Terms & Conditions:** [`terms.md`](terms.md)
-
-The game stores only Reddit-account-linked gameplay data (username, XP, rank, badges, theories, votes) in Devvit-managed Redis. No emails, passwords, payment data, or external tracking. See the policies above for details.
-
-> **Devvit App Directory / GitHub Pages:** the App Directory requires public Privacy Policy and Terms **URLs**. Enable **GitHub Pages** for this repo (Settings → Pages → deploy from branch, root), then use:
-> `https://<your-username>.github.io/<repo>/privacy` and `https://<your-username>.github.io/<repo>/terms`
-> (GitHub Pages serves `privacy.md`/`terms.md` as HTML). Paste those two URLs into your Devvit app listing.
-
-## 📜 License
+## License
 
 BSD-3-Clause — see [LICENSE](LICENSE).
 
-**Built for Reddit's Devvit platform.**
+---
+
+_Built for Reddit's Devvit platform._

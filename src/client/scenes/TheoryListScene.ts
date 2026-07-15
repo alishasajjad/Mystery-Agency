@@ -3,7 +3,7 @@ import { Theory, VotingPhase } from '../../shared/types';
 import { XP_VALUES } from '../../shared/constants';
 import { ApiClient } from '../api';
 import { GlassCard, PremiumButton, Badge, SceneTransitions, ToastManager, ScrollView, COLORS } from '../components/UIComponents';
-import { phaseStatusLine, notifyPhaseChange } from '../phase';
+import { phaseStatusLine, notifyPhaseChange, chapterNumber } from '../phase';
 
 type TheoryRow = {
   theory: Theory;
@@ -73,10 +73,11 @@ export class TheoryListScene extends Scene {
       shadow: { offsetX: 0, offsetY: 2, color: '#000000', blur: 4, fill: true },
     }).setOrigin(0.5);
 
+    // Header shows the CURRENTLY ACTIVE chapter (context). Per-theory chapter badges
+    // below use each theory's OWN stored chapter — they can differ from this one.
     const phase = this.votingPhase?.phase;
     const phaseColor = phase === 'voting' ? '#22c55e' : phase === 'submission' ? '#f59e0b' : COLORS.textSecondary;
-    const chapterNum = this.votingPhase?.chapter_id ? this.votingPhase.chapter_id.replace('chapter', '') : '?';
-    const phaseText = this.votingPhase ? `📖 Chapter ${chapterNum}   ·   ${phaseStatusLine(this.votingPhase)}` : '';
+    const phaseText = this.votingPhase ? `Now viewing Chapter ${chapterNumber(this.votingPhase.chapter_id)}   ·   ${phaseStatusLine(this.votingPhase)}` : '';
     this.add.text(512, 78, phaseText, { fontSize: '14px', color: phaseColor, fontStyle: 'bold' }).setOrigin(0.5);
 
     PremiumButton.create(this, 66, 42, 92, 36, '← BACK', () => SceneTransitions.fade(this, 'EvidenceScene'), { color: 0x64748b, hoverColor: 0x94a3b8, fontSize: 14, glow: false });
@@ -111,9 +112,11 @@ export class TheoryListScene extends Scene {
       this.add.text(-400, 0, theory.author_username.charAt(0).toUpperCase(), { fontSize: '20px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5),
       this.add.text(-360, -40, theory.author_username, { fontSize: '15px', color: COLORS.text, fontStyle: 'bold' }).setOrigin(0, 0.5),
       Badge.create(this, -215, -40, theory.theory_type.toUpperCase(), 'default'),
-      // Chapter label so theories from different chapters are never confused.
-      this.add.text(-120, -40, `📖 CHAPTER ${theory.chapter_id.replace('chapter', '')}`, {
+      // Per-theory chapter chip — derived from THIS theory's stored chapter_id,
+      // so a theory always shows the chapter it was actually submitted for.
+      this.add.text(-120, -40, `📖 CHAPTER ${chapterNumber(theory.chapter_id)}`, {
         fontSize: '12px', color: '#38bdf8', fontStyle: 'bold',
+        backgroundColor: '#0b1220', padding: { x: 8, y: 3 },
       }).setOrigin(0, 0.5),
       this.add.text(-360, 6, theory.content.substring(0, 150) + (theory.content.length > 150 ? '…' : ''), {
         fontSize: '14px', color: COLORS.textSecondary, wordWrap: { width: 640 }, lineSpacing: 2,

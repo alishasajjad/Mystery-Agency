@@ -1,326 +1,169 @@
-import { Scene } from 'phaser';
-import { LeaderboardEntry } from '../../shared/types';
+import { Scene, GameObjects } from 'phaser';
+import { LeaderboardEntry, LeaderboardType } from '../../shared/types';
 import { ApiClient } from '../api';
-import { GlassCard, PremiumButton, Badge, SceneTransitions, COLORS } from '../components/UIComponents';
+import { GlassCard, PremiumButton, SceneTransitions, COLORS } from '../components/UIComponents';
+
+type TabDef = { type: LeaderboardType; label: string; icon: string };
+
+const TABS: TabDef[] = [
+  { type: 'xp', label: 'XP', icon: '⭐' },
+  { type: 'canon_rate', label: 'CANON', icon: '🏆' },
+  { type: 'votes_received', label: 'VOTES', icon: '🗳️' },
+];
+
+const META: Record<LeaderboardType, { subtitle: string; unit: string; empty: string }> = {
+  xp: { subtitle: 'Ranked by total XP', unit: 'XP', empty: 'No detectives on the board yet.\nSolve cases and earn XP to claim the top spot.' },
+  canon_rate: { subtitle: 'Ranked by canon theories', unit: 'CANON', empty: 'No canon theories yet.\nGet your theory voted canon to appear here.' },
+  votes_received: { subtitle: 'Ranked by votes received', unit: 'VOTES', empty: 'No votes counted yet.\nSubmit theories the community wants to upvote.' },
+};
+
+const MEDALS = ['🥇', '🥈', '🥉'];
+const MEDAL_COLORS = [COLORS.gold, COLORS.silver, COLORS.bronze];
+
+// Row geometry (card centered at x=512, spans -360..+360).
+const ROW_W = 760;
+const ROW_H = 50;
+const ROW_PITCH = 56;
+const LIST_TOP = 196;
+const COL = { rank: -352, avatar: -300, name: -262, metric: 348 };
 
 export class LeaderboardScene extends Scene {
   private leaderboard: LeaderboardEntry[] = [];
   private currentUsername: string | null = null;
-  private loadingText: Phaser.GameObjects.Text | null = null;
-  private leaderboardType: 'xp' | 'canon_rate' | 'votes_received' = 'xp';
+  private leaderboardType: LeaderboardType = 'xp';
 
   constructor() {
     super({ key: 'LeaderboardScene' });
   }
 
   async create() {
-    // Premium dark background with gradient
     this.add.rectangle(512, 384, 1024, 768, COLORS.background);
-    
-    // Add subtle gradient overlay for depth
-    const gradient = this.add.rectangle(512, 384, 1024, 768, COLORS.backgroundGradient)
-      .setAlpha(0.3);
-    
-    // Animate gradient for subtle movement
-    this.tweens.add({
-      targets: gradient,
-      alpha: 0.5,
-      duration: 7000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    const gradient = this.add.rectangle(512, 384, 1024, 768, COLORS.backgroundGradient).setAlpha(0.3);
+    this.tweens.add({ targets: gradient, alpha: 0.5, duration: 7000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    // Show loading state
-    this.loadingText = this.add.text(512, 384, 'Loading leaderboard...', {
-      fontSize: '24px',
-      color: COLORS.text,
-      fontStyle: 'bold',
-      shadow: {
-        offsetX: 0,
-        offsetY: 2,
-        color: '#000000',
-        blur: 4,
-        fill: true,
-      },
-    }).setOrigin(0.5);
-
-    // Add loading spinner
-    const spinner = this.add.circle(512, 430, 20, COLORS.accent)
-      .setStrokeStyle(3, COLORS.highlight);
-    
-    this.tweens.add({
-      targets: spinner,
-      rotation: Math.PI * 2,
-      duration: 1000,
-      repeat: -1,
-      ease: 'Linear',
-    });
+    const loadingText = this.add.text(512, 380, 'Loading leaderboard…', { fontSize: '22px', color: COLORS.text, fontStyle: 'bold' }).setOrigin(0.5);
+    const spinner = this.add.circle(512, 430, 20, COLORS.accent).setStrokeStyle(3, COLORS.highlight);
+    this.tweens.add({ targets: spinner, rotation: Math.PI * 2, duration: 1000, repeat: -1, ease: 'Linear' });
 
     try {
-      // Load user profile to get current username
-      const profileResponse = await ApiClient.getProfile();
-      this.currentUsername = profileResponse.user.username;
-
-      // Load leaderboard
-      const leaderboardResponse = await ApiClient.getLeaderboard(this.leaderboardType);
+      const [profileResponse, leaderboardResponse] = await Promise.all([
+        ApiClient.getProfile().catch(() => null),
+        ApiClient.getLeaderboard(this.leaderboardType),
+      ]);
+      this.currentUsername = profileResponse?.user.username ?? null;
       this.leaderboard = leaderboardResponse.leaderboard;
 
-      // Clear loading state
-      this.loadingText?.destroy();
+      loadingText.destroy();
       spinner.destroy();
       gradient.destroy();
-      
       this.buildScene();
     } catch (error) {
       console.error('Failed to load leaderboard:', error);
-      this.loadingText?.setText('Failed to load leaderboard. Please try again.');
+      loadingText.setText('Failed to load leaderboard. Please try again.');
       spinner.destroy();
       gradient.destroy();
-
-      // Add retry button
-      PremiumButton.create(
-        this,
-        512,
-        450,
-        200,
-        50,
-        'RETRY',
-        () => this.scene.restart(),
-        { color: 0xe94560, hoverColor: 0xff6b6b }
-      );
-
-      // Add back button
-      PremiumButton.create(
-        this,
-        512,
-        520,
-        200,
-        50,
-        'BACK',
-        () => SceneTransitions.fade(this, 'EvidenceScene'),
-        { color: COLORS.primary, hoverColor: COLORS.secondary }
-      );
+      PremiumButton.create(this, 512, 450, 200, 50, 'RETRY', () => this.scene.restart(), { color: 0xe94560, hoverColor: 0xff6b6b });
+      PremiumButton.create(this, 512, 520, 200, 50, 'BACK', () => SceneTransitions.fade(this, 'EvidenceScene'), { color: COLORS.primary, hoverColor: COLORS.secondary });
     }
   }
 
   private buildScene() {
-    // Premium dark background
-    this.add.rectangle(512, 384, 1024, 768, COLORS.background);
+    // Header.
+    this.add.text(512, 40, '🏆 LEADERBOARD', {
+      fontSize: '26px', color: '#ffd700', fontStyle: 'bold', fontFamily: 'Arial Black',
+      shadow: { offsetX: 0, offsetY: 2, color: '#000000', blur: 4, fill: true },
+    }).setOrigin(0.5);
+    PremiumButton.create(this, 70, 40, 96, 38, '← BACK', () => SceneTransitions.fade(this, 'EvidenceScene'), { color: 0x64748b, hoverColor: 0x94a3b8, fontSize: 15, glow: false });
 
-    // Title card with icon
-    GlassCard.create(
-      this,
-      512,
-      50,
-      700,
-      60,
-      [this.add.text(0, 0, '🏆 LEADERBOARD', {
-        fontSize: '24px',
-        color: '#ffd700',
-        fontStyle: 'bold',
-        fontFamily: 'Arial Black',
-        shadow: {
-          offsetX: 0,
-          offsetY: 2,
-          color: '#000000',
-          blur: 4,
-          fill: true,
-        },
-      }).setOrigin(0.5)],
-      { borderColor: COLORS.accent, glow: true }
-    );
+    this.createTabs();
 
-    // Back button
-    PremiumButton.create(
-      this,
-      100,
-      50,
-      100,
-      40,
-      '← BACK',
-      () => SceneTransitions.fade(this, 'EvidenceScene'),
-      { color: 0x64748b, hoverColor: 0x94a3b8, fontSize: 16, glow: false }
-    );
+    this.add.text(512, 128, META[this.leaderboardType].subtitle, {
+      fontSize: '13px', color: COLORS.textMuted, fontStyle: 'italic',
+    }).setOrigin(0.5);
 
-    // Leaderboard type tabs
-    this.createTypeTabs();
-
-    // Display leaderboard
-    this.displayLeaderboard();
-  }
-
-  private createTypeTabs() {
-    const tabs = [
-      { type: 'xp' as const, label: 'XP', x: 350 },
-      { type: 'canon_rate' as const, label: 'CANON', x: 512 },
-      { type: 'votes_received' as const, label: 'VOTES', x: 674 },
-    ];
-
-    tabs.forEach((tab) => {
-      const isActive = this.leaderboardType === tab.type;
-      PremiumButton.create(
-        this,
-        tab.x,
-        110,
-        120,
-        40,
-        tab.label,
-        () => {
-          this.leaderboardType = tab.type;
-          this.scene.restart();
-        },
-        { 
-          color: isActive ? 0xe94560 : COLORS.card, 
-          hoverColor: isActive ? 0xff6b6b : COLORS.secondary,
-          fontSize: 16,
-          glow: isActive
-        }
-      );
-    });
-  }
-
-  private scoreLabel(): string {
-    switch (this.leaderboardType) {
-      case 'canon_rate': return 'CANON PTS';
-      case 'votes_received': return 'VOTES';
-      default: return 'XP';
-    }
-  }
-
-  // Column x-offsets relative to a row card centered at x=512.
-  private static readonly COLS = { rank: -360, name: -240, xp: 60, canon: 220, score: 350 };
-
-  private displayLeaderboard() {
     if (this.leaderboard.length === 0) {
-      this.add.text(512, 400, 'No leaderboard data yet.\nPlay to climb the ranks!', {
-        fontSize: '20px',
-        color: COLORS.textSecondary,
-        align: 'center',
-      }).setOrigin(0.5);
+      this.renderEmptyState();
       return;
     }
 
-    // Podium for top 3
-    this.createPodium();
+    // Column header.
+    const unit = META[this.leaderboardType].unit;
+    this.add.text(512 + COL.name, 168, 'DETECTIVE', { fontSize: '11px', color: COLORS.textMuted, fontStyle: 'bold' }).setOrigin(0, 0.5);
+    this.add.text(512 + COL.rank, 168, '#', { fontSize: '11px', color: COLORS.textMuted, fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(512 + COL.metric, 168, unit, { fontSize: '11px', color: COLORS.textMuted, fontStyle: 'bold' }).setOrigin(1, 0.5);
 
-    const C = LeaderboardScene.COLS;
-    // Column headers.
-    const headerY = 435;
-    const header = (dx: number, label: string, color = COLORS.textMuted) =>
-      this.add.text(512 + dx, headerY, label, { fontSize: '12px', color, fontStyle: 'bold' }).setOrigin(0.5);
-    header(C.rank, '#');
-    header(C.name, 'DETECTIVE');
-    header(C.xp, 'XP');
-    header(C.canon, 'CANON');
-    header(C.score, this.scoreLabel());
+    this.leaderboard.slice(0, 10).forEach((entry, i) => this.renderRow(entry, i));
+  }
 
-    // Rows 4+.
-    let yOffset = 470;
-    this.leaderboard.slice(3).forEach((entry, index) => {
-      const rank = index + 4;
-      const isCurrentPlayer = entry.username === this.currentUsername;
-
-      GlassCard.create(
-        this,
-        512,
-        yOffset,
-        820,
-        44,
-        [
-          this.add.text(C.rank, 0, `#${rank}`, { fontSize: '15px', color: COLORS.textSecondary }).setOrigin(0.5),
-          this.add.text(C.name, 0, entry.username, {
-            fontSize: '15px',
-            color: isCurrentPlayer ? '#22c55e' : COLORS.text,
-            fontStyle: isCurrentPlayer ? 'bold' : 'normal',
-          }).setOrigin(0.5),
-          this.add.text(C.xp, 0, entry.xp.toLocaleString(), { fontSize: '15px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5),
-          this.add.text(C.canon, 0, entry.theories_canonized.toString(), { fontSize: '15px', color: COLORS.text }).setOrigin(0.5),
-          this.add.text(C.score, 0, Math.round(entry.score).toLocaleString(), { fontSize: '15px', color: '#e94560' }).setOrigin(0.5),
-        ],
-        { borderColor: isCurrentPlayer ? 0x22c55e : COLORS.secondary, hover: false }
-      );
-
-      yOffset += 52;
+  private createTabs() {
+    const startX = 512 - (TABS.length - 1) * 90;
+    TABS.forEach((tab, i) => {
+      const x = startX + i * 180;
+      const active = this.leaderboardType === tab.type;
+      PremiumButton.create(this, x, 90, 160, 42, `${tab.icon} ${tab.label}`, () => {
+        if (this.leaderboardType !== tab.type) {
+          this.leaderboardType = tab.type;
+          this.scene.restart();
+        }
+      }, {
+        color: active ? 0xe94560 : COLORS.card,
+        hoverColor: active ? 0xff6b6b : COLORS.cardHover,
+        textColor: active ? '#ffffff' : COLORS.textSecondary,
+        fontSize: 15,
+        glow: active,
+      });
+      if (active) {
+        this.add.rectangle(x, 114, 120, 3, COLORS.accent); // active underline
+      }
     });
   }
 
-  private createPodium() {
-    if (this.leaderboard.length < 3) return;
+  private renderRow(entry: LeaderboardEntry, index: number) {
+    const rank = index + 1;
+    const isTop3 = rank <= 3;
+    const isMe = entry.username === this.currentUsername;
+    const y = LIST_TOP + index * ROW_PITCH;
+    const accent = isMe ? 0x22c55e : isTop3 ? MEDAL_COLORS[index]! : COLORS.secondary;
 
-    const top3 = this.leaderboard.slice(0, 3);
-    const podiumData = [
-      { rank: 2, entry: top3[1], x: 300, y: 350, height: 90, color: COLORS.silver, medal: '🥈' },
-      { rank: 1, entry: top3[0], x: 512, y: 320, height: 130, color: COLORS.gold, medal: '🥇' },
-      { rank: 3, entry: top3[2], x: 724, y: 380, height: 70, color: COLORS.bronze, medal: '🥉' },
+    const content: GameObjects.GameObject[] = [
+      // Rank / medal.
+      this.add.text(COL.rank, 0, isTop3 ? MEDALS[index]! : `#${rank}`, {
+        fontSize: isTop3 ? '22px' : '15px', color: isTop3 ? '#ffffff' : COLORS.textSecondary, fontStyle: 'bold',
+      }).setOrigin(0.5),
+      // Avatar.
+      this.add.circle(COL.avatar, 0, 16, COLORS.secondary).setStrokeStyle(2, accent),
+      this.add.text(COL.avatar, 0, entry.username.charAt(0).toUpperCase(), { fontSize: '14px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5),
+      // Name + rank title.
+      this.add.text(COL.name, -8, entry.username + (isMe ? '  (you)' : ''), {
+        fontSize: '15px', color: isMe ? '#4ade80' : COLORS.text, fontStyle: 'bold',
+      }).setOrigin(0, 0.5),
+      this.add.text(COL.name, 11, entry.rank, { fontSize: '11px', color: COLORS.textMuted }).setOrigin(0, 0.5),
+      // Metric value (right-aligned).
+      this.add.text(COL.metric, 0, Math.round(entry.score).toLocaleString(), {
+        fontSize: '20px', color: '#ffd700', fontStyle: 'bold', fontFamily: 'Arial Black',
+      }).setOrigin(1, 0.5),
     ];
 
-    podiumData.forEach((data) => {
-      if (!data.entry) return;
+    const card = GlassCard.create(this, 512, y, ROW_W, ROW_H, content, { borderColor: accent, glow: isTop3 || isMe });
+    card.setAlpha(0);
+    this.tweens.add({ targets: card, alpha: 1, duration: 350, delay: index * 60, ease: 'Power2' });
+  }
 
-      // Podium base with glow
-      const podiumBase = this.add.rectangle(data.x, data.y + data.height / 2, 160, data.height, data.color)
-        .setStrokeStyle(4, data.color);
-      
-      // Add glow effect
-      const glow = this.add.rectangle(data.x, data.y + data.height / 2, 170, data.height + 10, data.color)
-        .setAlpha(0.3)
-        .setStrokeStyle(2, data.color);
-
-      // Medal icon
-      this.add.text(data.x, data.y - 45, data.medal, {
-        fontSize: '40px',
-      }).setOrigin(0.5);
-
-      // Rank badge
-      Badge.create(this, data.x, data.y - 20, `#${data.rank}`, 'canon');
-
-      // Avatar circle with initial
-      this.add.circle(data.x, data.y + 10, 25, COLORS.secondary)
-        .setStrokeStyle(3, data.color);
-      
-      this.add.text(data.x, data.y + 10, data.entry.username.charAt(0).toUpperCase(), {
-        fontSize: '18px',
-        color: '#ffd700',
-        fontStyle: 'bold',
-      }).setOrigin(0.5);
-
-      // Username
-      this.add.text(data.x, data.y + 50, data.entry.username, {
-        fontSize: '14px',
-        color: COLORS.text,
-        fontStyle: 'bold',
-      }).setOrigin(0.5);
-
-      // XP with icon
-      this.add.text(data.x, data.y + 70, `⭐ ${data.entry.xp.toLocaleString()}`, {
-        fontSize: '12px',
-        color: COLORS.textSecondary,
-      }).setOrigin(0.5);
-      
-      // Animate podium entrance
-      podiumBase.setScale(0);
-      glow.setScale(0);
-      
-      this.tweens.add({
-        targets: [podiumBase, glow],
-        scale: 1,
-        duration: 800,
-        delay: 200,
-        ease: 'Back',
-      });
-    });
+  private renderEmptyState() {
+    const meta = META[this.leaderboardType];
+    GlassCard.create(this, 512, 420, 640, 240, [
+      this.add.text(0, -70, '🔍', { fontSize: '52px' }).setOrigin(0.5),
+      this.add.text(0, 0, 'THE BOARD IS WIDE OPEN', {
+        fontSize: '20px', color: '#ffd700', fontStyle: 'bold', fontFamily: 'Arial Black',
+      }).setOrigin(0.5),
+      this.add.text(0, 48, meta.empty, {
+        fontSize: '15px', color: COLORS.textSecondary, align: 'center', lineSpacing: 4, wordWrap: { width: 560 },
+      }).setOrigin(0.5),
+    ], { borderColor: COLORS.highlight, glow: true });
   }
 
   shutdown() {
-    // Cleanup loading text
-    this.loadingText?.destroy();
-    this.loadingText = null;
-    
-    // Cleanup tweens
     this.tweens.killAll();
-    
-    // Cleanup timers
     this.time.removeAllEvents();
   }
 }

@@ -28,6 +28,17 @@ export const PHASE_INFO: Record<VotingPhaseName, PhaseInfo> = {
   },
 };
 
+/**
+ * Extract a chapter number from a stored chapter id (e.g. "chapter3" -> "3").
+ * Always pass a THEORY's stored `chapter_id` for per-theory labels — never the
+ * currently active chapter. Returns "?" for missing/unknown ids.
+ */
+export function chapterNumber(chapterId: string | null | undefined): string {
+  if (!chapterId) return '?';
+  const n = chapterId.replace(/^chapter/i, '').trim();
+  return n.length > 0 ? n : '?';
+}
+
 /** Human-readable time remaining, e.g. "5h 23m", "42m", or "soon". */
 export function formatRemaining(ms: number): string {
   if (!ms || ms <= 0) return 'soon';

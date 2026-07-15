@@ -140,12 +140,12 @@ export class Preloader extends Scene {
   }
 
   preload() {
-    // Load assets - disabled as no assets exist in public/assets
-    // this.load.setPath('assets');
-    // this.load.image('logo', 'logo.png');
+    // Intentionally empty: defining preload() starts Phaser's loader, which fires
+    // the 'complete' event (registered in init) even with no assets queued — that
+    // is what transitions the Preloader to the Main Menu.
   }
 
   create() {
-    // Scene transition handled in the load 'complete' event.
+    // Transition is handled by the loader 'complete' handler registered in init().
   }
 }
