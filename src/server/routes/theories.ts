@@ -7,28 +7,20 @@ import {
   addTheoryToChapter,
   getTheoriesByChapter,
   incrementTheoryVotes,
-  setCanonTheory,
-  getVotingPhase,
   addVoteToTheory,
   hasUserVotedForTheory,
   recordVoteCast,
   recordVoteReceived,
-  recordCanonForAuthor,
   resetDailyVotesIfNeeded,
+  hasSubmittedForChapter,
+  recordChapterSubmission,
   getCurrentChapter,
   getChapter,
   setUser,
-  setChapter,
   getTopTheoryForChapter,
 } from '../services/redis';
-import {
-  addXP,
-  updateStreak,
-  checkAndAwardBadges,
-  getMaxTheoriesForRank,
-  getMaxVotesForRank,
-  calculateRank,
-} from '../services/xp';
+import { addXP, updateStreak, checkAndAwardBadges, getMaxVotesForRank, calculateRank } from '../services/xp';
+import { resolvePhase, canonizeTheory } from '../services/phase';
 import { getUserId, isModerator } from '../services/auth';
 import { XP_VALUES, THEORY_CONFIG, VOTING_PHASES } from '../../shared/constants';
 import type { Theory, TheoryType } from '../../shared/types';
@@ -55,7 +47,8 @@ theories.get('/', async (c: Context) => {
 
   const chapter = await getChapter(redis, currentChapterId);
   const theoryIds = await getTheoriesByChapter(redis, currentChapterId);
-  const votingPhase = await getVotingPhase(redis);
+  const votingPhase = await resolvePhase(redis);
+  const userSubmitted = await hasSubmittedForChapter(redis, currentChapterId, userId);
 
   const theoryList: Theory[] = [];
   for (const theoryId of theoryIds) {
@@ -65,10 +58,10 @@ theories.get('/', async (c: Context) => {
   // Show the most upvoted theories first.
   theoryList.sort((a, b) => b.votes - a.votes);
 
-  return c.json({ chapter, theories: theoryList, voting_phase: votingPhase });
+  return c.json({ chapter, theories: theoryList, voting_phase: votingPhase, user_submitted: userSubmitted });
 });
 
-// Submit a new theory
+// Submit a new theory (one per chapter, per player)
 theories.post('/', async (c: Context) => {
   const userId = getUserId();
   if (!userId) {
@@ -93,7 +86,7 @@ theories.post('/', async (c: Context) => {
     return c.json({ error: 'Tag at least one piece of evidence' }, 400);
   }
 
-  const votingPhase = await getVotingPhase(redis);
+  const votingPhase = await resolvePhase(redis);
   if (votingPhase.phase !== VOTING_PHASES.SUBMISSION) {
     return c.json({ error: 'Theory submission is closed' }, 400);
   }
@@ -101,6 +94,11 @@ theories.post('/', async (c: Context) => {
   const currentChapterId = await getCurrentChapter(redis);
   if (!currentChapterId) {
     return c.json({ error: 'No active chapter' }, 404);
+  }
+
+  // Enforce ONE theory per chapter per player (server-side authority).
+  if (await hasSubmittedForChapter(redis, currentChapterId, userId)) {
+    return c.json({ error: 'You have already submitted a theory for this chapter' }, 409);
   }
 
   const chapter = await getChapter(redis, currentChapterId);
@@ -120,12 +118,6 @@ theories.post('/', async (c: Context) => {
     return c.json({ error: 'User not found' }, 404);
   }
 
-  const rank = calculateRank(user.xp);
-  const maxTheories = getMaxTheoriesForRank(rank);
-  if (maxTheories !== -1 && user.theories_submitted >= maxTheories) {
-    return c.json({ error: 'You have reached your theory limit for this rank' }, 400);
-  }
-
   const now = Date.now();
   const theoryId = `theory_${now}_${Math.random().toString(36).substring(2, 11)}`;
   const theory: Theory = {
@@ -143,6 +135,7 @@ theories.post('/', async (c: Context) => {
 
   await setTheory(redis, theoryId, theory);
   await addTheoryToChapter(redis, currentChapterId, theoryId, now);
+  await recordChapterSubmission(redis, currentChapterId, userId, theoryId);
 
   user.theories_submitted += 1;
   await setUser(redis, userId, user);
@@ -166,7 +159,7 @@ theories.post('/:theoryId/vote', async (c: Context) => {
     return c.json({ error: 'Theory ID required' }, 400);
   }
 
-  const votingPhase = await getVotingPhase(redis);
+  const votingPhase = await resolvePhase(redis);
   if (votingPhase.phase !== VOTING_PHASES.VOTING) {
     return c.json({ error: 'Voting is not open' }, 400);
   }
@@ -225,7 +218,7 @@ theories.post('/:theoryId/canon', async (c: Context) => {
     return c.json({ error: 'Theory not found' }, 404);
   }
 
-  await canonize(theory);
+  await canonizeTheory(redis, theory);
   return c.json({ theory: { ...theory, is_canon: true }, message: 'Theory set as canon' });
 });
 
@@ -245,28 +238,8 @@ theories.post('/auto-canon', async (c: Context) => {
     return c.json({ error: 'No theories found for this chapter' }, 404);
   }
 
-  await canonize(topTheory);
+  await canonizeTheory(redis, topTheory);
   return c.json({ theory: { ...topTheory, is_canon: true }, message: 'Top theory set as canon' });
 });
-
-/** Shared canonization side effects: mark canon, reward author, update chapter + boards. */
-async function canonize(theory: Theory): Promise<void> {
-  await setCanonTheory(redis, theory.id);
-  await addXP(redis, theory.author_id, XP_VALUES.THEORY_CANONIZED);
-  await recordCanonForAuthor(redis, theory.author_id);
-
-  const author = await getUser(redis, theory.author_id);
-  if (author) {
-    author.theories_canonized += 1;
-    await setUser(redis, theory.author_id, author);
-  }
-  await checkAndAwardBadges(redis, theory.author_id);
-
-  const chapter = await getChapter(redis, theory.chapter_id);
-  if (chapter) {
-    chapter.canon_theory = theory.content;
-    await setChapter(redis, theory.chapter_id, chapter);
-  }
-}
 
 export { theories };

@@ -26,8 +26,10 @@ At the top you'll see a **live status line**: `📖 Chapter N • Phase: SUBMISS
 | Voting control | **Open Voting** | Phase → `voting` (players can upvote) |
 | Voting control | **Close Voting** | Phase → `closed` (no submit/vote) |
 | Canon selection | **Auto-Select Canon** | Marks the **highest-voted** theory canon; author +100 XP |
+| Automation | **Pause / Resume Auto** | Stops or restarts the automatic 12-hour progression |
+| Automation | **Skip Phase** | Immediately triggers the next transition (canonizes + advances if voting ends) |
 | Chapter progression | **Advance Chapter** | Moves to the next chapter and reopens submissions |
-| Game management | **Reset Game** | Returns to Chapter 1, clears canon (asks for confirmation) |
+| Game management | **Reset Game** | Returns to Chapter 1, clears canon + submissions (asks for confirmation) |
 
 All actions show a success/error **toast** — no blocking dialogs.
 
@@ -39,11 +41,11 @@ All actions show a success/error **toast** — no blocking dialogs.
 4. **Advance Chapter** — moves the story forward and reopens submissions for the next chapter.
 5. Repeat through **Chapter 5**, the finale, where players predict the Red Fox's identity.
 
-> Pacing is entirely up to you — there is no automatic timer. A good cadence is one phase per day, or match your community's activity.
+> You don't have to do anything: phases **auto-advance every 12 hours** by default. Use the buttons only when you want to move faster/slower — **Skip Phase** to jump ahead, **Pause Auto** to hold a phase, **Resume Auto** to restart the timer.
 
 ## Content
 
-Five chapters ship with the game (*The Red Fox Files* arc). Chapter/phase state is stored in Redis and initialized automatically on app install; use **Reset Game** to start the arc over.
+Ten chapters ship with the game (*The Red Fox Files*, Books One & Two). Chapter/phase state is stored in Redis and initialized automatically on app install; use **Reset Game** to start the campaign over.
 
 ## Notes & limits
 

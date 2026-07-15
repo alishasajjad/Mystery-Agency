@@ -63,6 +63,15 @@ export type VotingPhase = {
   active: boolean;
   phase: VotingPhaseName;
   ends_at: number;
+  started_at: number;
+  // Whether automatic 12-hour progression is enabled (admins can pause it).
+  auto: boolean;
+  // Milliseconds until this phase auto-advances (0 if paused / no timer).
+  remaining_ms: number;
+  // The phase the game will move to when this one ends.
+  next_phase: VotingPhaseName;
+  // The chapter this phase belongs to.
+  chapter_id: string | null;
 };
 
 // Leaderboard Types
@@ -88,6 +97,8 @@ export type TheoriesResponse = {
   chapter: Chapter | null;
   theories: Theory[];
   voting_phase: VotingPhase;
+  // True if the current player has already submitted a theory for this chapter.
+  user_submitted: boolean;
 };
 
 export type SubmitTheoryResponse = {

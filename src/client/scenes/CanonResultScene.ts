@@ -69,6 +69,11 @@ export class CanonResultScene extends Scene {
       { borderColor: COLORS.accent, glow: true }
     );
 
+    // Chapter label so the canon result is clearly tied to its chapter.
+    this.add.text(512, 128, `📖 CHAPTER ${theory.chapter_id.replace('chapter', '')}`, {
+      fontSize: '14px', color: '#38bdf8', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
     // Theory card with enhanced styling
     GlassCard.create(
       this,

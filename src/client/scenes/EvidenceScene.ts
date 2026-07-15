@@ -1,7 +1,8 @@
 import { Scene, GameObjects } from 'phaser';
-import { Chapter } from '../../shared/types';
+import { Chapter, VotingPhase } from '../../shared/types';
 import { ApiClient } from '../api';
-import { GlassCard, PremiumButton, SceneTransitions, HUD, ScrollView, InfoModal, HOW_TO_PLAY_STEPS, COLORS } from '../components/UIComponents';
+import { GlassCard, PremiumButton, SceneTransitions, ToastManager, HUD, ScrollView, InfoModal, HOW_TO_PLAY_STEPS, COLORS } from '../components/UIComponents';
+import { phaseStatusLine, notifyPhaseChange } from '../phase';
 
 const CLUE_TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
   evidence: { label: 'EVIDENCE', color: '#38bdf8', icon: '🔎' },
@@ -13,6 +14,8 @@ export class EvidenceScene extends Scene {
   private chapter: Chapter | null = null;
   private loadingText: GameObjects.Text | null = null;
   private scrollView: ScrollView | null = null;
+  private votingPhase: VotingPhase | null = null;
+  private userSubmitted = false;
 
   constructor() {
     super({ key: 'EvidenceScene' });
@@ -22,6 +25,8 @@ export class EvidenceScene extends Scene {
     this.chapter = null;
     this.loadingText = null;
     this.scrollView = null;
+    this.votingPhase = null;
+    this.userSubmitted = false;
   }
 
   async create() {
@@ -36,11 +41,15 @@ export class EvidenceScene extends Scene {
     this.tweens.add({ targets: spinner, rotation: Math.PI * 2, duration: 1000, repeat: -1, ease: 'Linear' });
 
     try {
-      const [chapterResponse, profileResponse] = await Promise.all([
+      const [chapterResponse, profileResponse, theoriesResponse] = await Promise.all([
         ApiClient.getChapter(),
         ApiClient.getProfile().catch(() => null),
+        ApiClient.getTheories().catch(() => null),
       ]);
       this.chapter = chapterResponse.chapter;
+      this.votingPhase = theoriesResponse?.voting_phase ?? null;
+      this.userSubmitted = theoriesResponse?.user_submitted ?? false;
+      if (this.votingPhase) notifyPhaseChange(this, this.votingPhase);
 
       this.loadingText.destroy();
       spinner.destroy();
@@ -77,9 +86,17 @@ export class EvidenceScene extends Scene {
     }).setOrigin(0.5);
     PremiumButton.create(this, 958, 92, 44, 36, '?', () => this.showHowToPlay(), { color: COLORS.primary, hoverColor: COLORS.highlight, fontSize: 18, glow: false });
 
+    // Phase status + countdown banner.
+    if (this.votingPhase) {
+      this.add.text(512, 118, phaseStatusLine(this.votingPhase), {
+        fontSize: '13px', color: COLORS.textSecondary, fontStyle: 'bold',
+        backgroundColor: '#0f172a', padding: { x: 10, y: 4 },
+      }).setOrigin(0.5);
+    }
+
     // --- Scrollable body ---
-    const VIEW_TOP = 122;
-    const VIEW_H = 560;
+    const VIEW_TOP = 138;
+    const VIEW_H = 544;
     this.scrollView = new ScrollView(this, 512, VIEW_TOP, 960, VIEW_H);
     let y = 8; // content-local top cursor
 
@@ -99,11 +116,39 @@ export class EvidenceScene extends Scene {
     y += 12;
     this.scrollView.setContentHeight(y);
 
-    // --- Fixed bottom action bar ---
-    PremiumButton.create(this, 190, 712, 250, 48, '✍️ SUBMIT THEORY', () => this.scene.start('TheoryScene', { chapter: this.chapter }), { color: 0xe94560, hoverColor: 0xff6b6b, fontSize: 17, glow: true });
+    // --- Fixed bottom action bar (primary action adapts to phase + submission state) ---
+    this.createPrimaryAction();
     PremiumButton.create(this, 428, 712, 200, 48, 'VIEW THEORIES', () => SceneTransitions.fade(this, 'TheoryListScene'), { color: COLORS.primary, hoverColor: COLORS.secondary, fontSize: 15 });
     PremiumButton.create(this, 642, 712, 200, 48, 'LEADERBOARD', () => SceneTransitions.fade(this, 'LeaderboardScene'), { color: COLORS.primary, hoverColor: COLORS.secondary, fontSize: 15 });
     PremiumButton.create(this, 852, 712, 150, 48, 'PROFILE', () => SceneTransitions.fade(this, 'ProfileScene'), { color: COLORS.primary, hoverColor: COLORS.secondary, fontSize: 15 });
+  }
+
+  /** Context-aware primary button: submit / already-submitted / vote / closed. */
+  private createPrimaryAction() {
+    const phase = this.votingPhase?.phase ?? 'submission';
+    const x = 190, y = 712, w = 250, h = 48;
+
+    if (this.userSubmitted) {
+      PremiumButton.create(this, x, y, w, h, '✓ THEORY SUBMITTED',
+        () => ToastManager.show(this, 'You have already submitted a theory for this chapter.', 'info'),
+        { color: 0x334155, hoverColor: 0x475569, fontSize: 15, glow: false });
+      return;
+    }
+    if (phase === 'submission') {
+      PremiumButton.create(this, x, y, w, h, '✍️ SUBMIT THEORY',
+        () => this.scene.start('TheoryScene', { chapter: this.chapter }),
+        { color: 0xe94560, hoverColor: 0xff6b6b, fontSize: 17, glow: true });
+      return;
+    }
+    if (phase === 'voting') {
+      PremiumButton.create(this, x, y, w, h, '🗳️ VOTE NOW',
+        () => SceneTransitions.fade(this, 'TheoryListScene'),
+        { color: 0x22c55e, hoverColor: 0x4ade80, fontSize: 16, glow: true });
+      return;
+    }
+    PremiumButton.create(this, x, y, w, h, '🔒 SUBMISSIONS CLOSED',
+      () => ToastManager.show(this, 'Submissions are closed for this chapter.', 'info'),
+      { color: 0x334155, hoverColor: 0x475569, fontSize: 14, glow: false });
   }
 
   private addStoryCard(topY: number): number {

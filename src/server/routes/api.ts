@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { redis, reddit, context } from '@devvit/web/server';
 import { theories } from './theories';
-import { getUser, createUser, getCurrentChapter, getChapter, getLeaderboard, getVotingPhase, setVotingPhase, setCurrentChapter } from '../services/redis';
+import { getUser, createUser, getCurrentChapter, getChapter, getLeaderboard, setCurrentChapter } from '../services/redis';
 import { claimDailyLogin } from '../services/xp';
+import { resolvePhase, setPhaseManual, setAuto, skipPhase } from '../services/phase';
 import { getUserId, isModerator } from '../services/auth';
 import { initializeStory, resetStory, CHAPTER_IDS } from '../services/story-init';
-import { THEORY_CONFIG, VOTING_PHASES, type VotingPhaseType } from '../../shared/constants';
+import { VOTING_PHASES, type VotingPhaseType } from '../../shared/constants';
 import type { LeaderboardType, VotingPhaseName } from '../../shared/types';
 
 type ErrorResponse = { status: 'error'; message: string };
@@ -106,7 +107,7 @@ api.get('/admin/status', async (c) => {
     console.error('admin/status username lookup failed:', error);
   }
   const moderator = await isModerator();
-  const votingPhase = await getVotingPhase(redis);
+  const votingPhase = await resolvePhase(redis);
   const chapterId = await getCurrentChapter(redis);
 
   return c.json({
@@ -117,6 +118,8 @@ api.get('/admin/status', async (c) => {
     adminAccess: moderator,
     phase: votingPhase.phase,
     chapterId,
+    voting_phase: votingPhase,
+    chapterCount: CHAPTER_IDS.length,
   });
 });
 
@@ -134,12 +137,41 @@ api.post('/voting-phase', async (c) => {
   }
 
   try {
-    const windowHours = phase === VOTING_PHASES.VOTING ? THEORY_CONFIG.VOTING_WINDOW_HOURS : THEORY_CONFIG.SUBMISSION_WINDOW_HOURS;
-    await setVotingPhase(redis, phase !== VOTING_PHASES.CLOSED, phase, Date.now() + windowHours * 3600 * 1000);
-    return c.json({ message: 'Voting phase updated', phase });
+    const voting_phase = await setPhaseManual(redis, phase);
+    return c.json({ message: 'Voting phase updated', phase, voting_phase });
   } catch (error) {
     console.error('Voting Phase Error:', error);
     return c.json<ErrorResponse>({ status: 'error', message: 'Failed to update voting phase' }, 500);
+  }
+});
+
+// Toggle automatic 12-hour progression (pause = auto:false, resume = auto:true).
+api.post('/phase/auto', async (c) => {
+  const denied = await requireMod();
+  if (denied) return c.json<ErrorResponse>(denied, 403);
+
+  const body = await c.req.json().catch(() => ({}));
+  const auto = body.auto === true;
+  try {
+    const voting_phase = await setAuto(redis, auto);
+    return c.json({ message: auto ? 'Automatic progression resumed' : 'Automatic progression paused', voting_phase });
+  } catch (error) {
+    console.error('Phase Auto Error:', error);
+    return c.json<ErrorResponse>({ status: 'error', message: 'Failed to update progression' }, 500);
+  }
+});
+
+// Immediately trigger the next phase transition (canonizes + advances if voting ends).
+api.post('/phase/skip', async (c) => {
+  const denied = await requireMod();
+  if (denied) return c.json<ErrorResponse>(denied, 403);
+
+  try {
+    const voting_phase = await skipPhase(redis);
+    return c.json({ message: 'Advanced to the next phase', voting_phase });
+  } catch (error) {
+    console.error('Phase Skip Error:', error);
+    return c.json<ErrorResponse>({ status: 'error', message: 'Failed to skip phase' }, 500);
   }
 });
 
@@ -160,8 +192,8 @@ api.post('/chapter/advance', async (c) => {
 
     const nextChapterId = CHAPTER_IDS[idx + 1]!;
     await setCurrentChapter(redis, nextChapterId);
-    // Fresh chapter opens for submissions again.
-    await setVotingPhase(redis, true, VOTING_PHASES.SUBMISSION, Date.now() + THEORY_CONFIG.SUBMISSION_WINDOW_HOURS * 3600 * 1000);
+    // Fresh chapter opens for submissions again (timer + auto schedule reset).
+    await setPhaseManual(redis, VOTING_PHASES.SUBMISSION);
     return c.json({ message: 'Chapter advanced', nextChapterId });
   } catch (error) {
     console.error('Advance Chapter Error:', error);

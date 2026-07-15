@@ -67,12 +67,17 @@ export const REDIS_KEYS = {
   STORY_CURRENT_CHAPTER: 'story:current_chapter',
   THEORY: (theoryId: string) => `theory:${theoryId}`,
   THEORIES_BY_CHAPTER: (chapterId: string) => `theories:chapter:${chapterId}`,
+  // Hash of userId -> theoryId, one entry per author per chapter (one-theory-per-chapter rule).
+  CHAPTER_AUTHORS: (chapterId: string) => `chapter:${chapterId}:authors`,
   THEORIES_CANON: 'theories:canon',
   THEORIES_TRENDING: 'theories:trending',
   VOTES_BY_THEORY: (theoryId: string) => `votes:theory:${theoryId}`,
   VOTING_ACTIVE: 'voting:active',
   VOTING_PHASE: 'voting:phase',
   VOTING_ENDS_AT: 'voting:ends_at',
+  VOTING_STARTED_AT: 'voting:started_at',
+  VOTING_AUTO: 'voting:auto', // 'true' = automatic 12h progression enabled
+  VOTING_CHAPTER: 'voting:chapter', // chapter the current phase belongs to (dedupes ticks)
   LEADERBOARD_XP: 'leaderboard:xp',
   LEADERBOARD_CANON_RATE: 'leaderboard:canon_rate',
   LEADERBOARD_VOTES_RECEIVED: 'leaderboard:votes_received',

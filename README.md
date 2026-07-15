@@ -34,6 +34,7 @@ A collaborative, community-driven detective game built on **Reddit's Devvit** pl
 - [Troubleshooting](#-troubleshooting)
 - [Known Limitations](#-known-limitations)
 - [Roadmap](#-roadmap)
+- [Privacy & Terms](#-privacy--terms)
 - [License](#-license)
 
 ---
@@ -103,7 +104,10 @@ stateDiagram-v2
 
 - **Theory lifecycle:** submitted (submission phase, +10 XP) → upvoted (voting phase, author +5 XP/vote) → possibly **canon** (+100 XP, shapes the chapter).
 - **Voting lifecycle:** opens/closes only by moderator; rank-based daily vote limits; no self-vote, no double-vote, no voting canon theories.
-- **Chapter lifecycle:** 5 embedded chapters (*The Red Fox Files* arc, ending in a predict-the-culprit finale); a moderator advances them; advancing reseeds the submission phase. Advancing past the last chapter is blocked (no dead-end).
+- **Chapter lifecycle:** 10 embedded chapters (*The Red Fox Files*, Books One & Two, ending in a predict-the-culprit finale). Phases **auto-advance every 12 hours** (submission → voting → canon reveal → next chapter); moderators can override, pause/resume, or skip at any time. Advancing past the last chapter is blocked (no dead-end).
+- **One theory per chapter:** each player may submit a single theory per chapter (enforced server-side; the submit button reflects it). This keeps voting focused and fair.
+- **Chapter labels everywhere:** every theory shows a `📖 CHAPTER N` badge in the list and canon screens so cross-chapter theories are never confused.
+- **Phase notifications:** when the phase or chapter changes, players see an in-game toast (e.g. "🗳️ Voting is now OPEN"), plus a live phase + countdown banner on the menu, evidence, and theory screens.
 
 ---
 
@@ -172,7 +176,7 @@ mystery-agency/
 - **`index.ts`** composes Hono: `/api/*` (game) and `/internal/*` (Devvit menu/triggers), served on the Devvit port.
 - **`routes/api.ts`** — profile, daily-login, chapter, leaderboard, and moderator-gated voting-phase / chapter-advance / set-chapter / reset.
 - **`routes/theories.ts`** — list, submit, vote, and moderator-gated canon / auto-canon, with full input validation.
-- **`services/` (game logic)** — `redis.ts` (typed data access), `xp.ts` (ranks/XP/badges/streaks/login), `auth.ts` (identity + mod check), `story-init.ts` (5-chapter seed/reset), `post.ts` (create post).
+- **`services/` (game logic)** — `redis.ts` (typed data access), `xp.ts` (ranks/XP/badges/streaks/login), `auth.ts` (identity + mod check), `phase.ts` (hybrid auto/manual phase engine + canonization), `story-init.ts` (10-chapter seed/reset), `post.ts` (create post).
 
 ## 🗄 Redis Architecture
 
@@ -202,7 +206,9 @@ Base path `/api`. Identity comes from Devvit `context.userId` (never a request b
 | POST | `/api/daily-login` | Claim daily bonus (idempotent per day) | Authenticated |
 | GET  | `/api/chapter` | Current chapter (self-heals if uninitialized) | Authenticated |
 | GET  | `/api/leaderboard?type=xp\|canon_rate\|votes_received` | Rankings | Authenticated |
-| GET  | `/api/admin/status` | Caller's moderator status + live phase/chapter (drives admin UI) | Authenticated |
+| GET  | `/api/admin/status` | Caller's moderator status + live phase/chapter/countdown | Authenticated |
+| POST | `/api/phase/auto` | Pause/resume automatic 12h progression | **Moderator** |
+| POST | `/api/phase/skip` | Immediately trigger the next phase transition | **Moderator** |
 | GET  | `/api/theories` | Theories for current chapter + voting phase | Authenticated |
 | POST | `/api/theories` | Submit a validated theory | Authenticated |
 | POST | `/api/theories/:id/vote` | Upvote a theory | Authenticated |
@@ -241,7 +247,7 @@ sequenceDiagram
 
 ## 🛠 Admin Tools
 
-Real subreddit moderators automatically see a **🛠️ ADMIN** button (top-right of the Main Menu) — the client checks `GET /api/admin/status`. The panel shows a **live status line** (current chapter + phase) and the recommended flow, and offers (all server-enforced): **Open Submissions / Open Voting / Close Voting**, **Auto-Select Canon**, **Advance Chapter**, **Reset Game** (in-scene confirm). Feedback uses in-scene toasts (no blocked `alert/confirm`). See [`docs/ADMIN_GUIDE.md`](docs/ADMIN_GUIDE.md).
+Real subreddit moderators automatically see a **🛠️ ADMIN** button (top-right of the Main Menu) — the client checks `GET /api/admin/status`. The panel shows a **live status line** (chapter, phase, countdown, automation state) and offers (all server-enforced): **manual override** (Open Submissions / Open Voting / Close Voting), **automation** (Pause/Resume auto-progression, Skip Phase, Auto-Select Canon), **chapter** (Advance), and **Reset Game** (in-scene confirm). Feedback uses in-scene toasts (no blocked `alert/confirm`). See [`docs/ADMIN_GUIDE.md`](docs/ADMIN_GUIDE.md).
 
 ---
 
@@ -322,7 +328,7 @@ Current verification is via the toolchain plus evidence-based code review (see `
 - **No automated tests** — validated by type-check/lint/build + code tracing.
 - **Non-atomic writes** — vote/submit use sequential Redis calls (no `watch`/multi transaction); safe under normal load, but not hardened for high contention.
 - **No rate limiting** on public routes.
-- **Phase transitions are manual** (moderator-driven); there is no automatic timer-based progression yet.
+- **Auto-progression is lazy** (evaluated on request, not a background cron): phases advance when a player/admin loads the game after the 12h timer elapses. On a completely idle game, the transition fires on the next visit. A tiny concurrency window at the exact moment of transition is guarded but not fully transactional.
 - **Audio toggles are cosmetic** — Settings persists preferences but no sound system exists yet.
 
 ## 🗺 Roadmap
@@ -349,7 +355,18 @@ Current verification is via the toolchain plus evidence-based code review (see `
 - [ ] Live Devvit playtest confirmed (needs `npm run login`)
 - [ ] Automated test suite · atomic writes · rate limiting
 
-**Completion ~95% · Production readiness 90/100 · Critical issues 0.** Full evidence in [`docs/FINAL_RELEASE_REPORT.md`](docs/FINAL_RELEASE_REPORT.md).
+**Completion ~96% · Production readiness 91/100 · Critical issues 0.** Full evidence in [`docs/FINAL_RELEASE_REPORT.md`](docs/FINAL_RELEASE_REPORT.md).
+
+## 🔒 Privacy & Terms
+
+- **Privacy Policy:** [`privacy.md`](privacy.md)
+- **Terms & Conditions:** [`terms.md`](terms.md)
+
+The game stores only Reddit-account-linked gameplay data (username, XP, rank, badges, theories, votes) in Devvit-managed Redis. No emails, passwords, payment data, or external tracking. See the policies above for details.
+
+> **Devvit App Directory / GitHub Pages:** the App Directory requires public Privacy Policy and Terms **URLs**. Enable **GitHub Pages** for this repo (Settings → Pages → deploy from branch, root), then use:
+> `https://<your-username>.github.io/<repo>/privacy` and `https://<your-username>.github.io/<repo>/terms`
+> (GitHub Pages serves `privacy.md`/`terms.md` as HTML). Paste those two URLs into your Devvit app listing.
 
 ## 📜 License
 

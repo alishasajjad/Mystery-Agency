@@ -6,7 +6,7 @@ A player-facing guide to how the game works.
 
 ## The premise
 
-**Mystery Agency** is a collaborative detective game. A legendary thief — **the Red Fox** — has resurfaced, and the whole community works one case at a time: read the evidence, submit a theory, vote on the best theories, and the community's top pick becomes **canon** and drives the story forward. It plays out over a five-chapter arc, *The Red Fox Files*.
+**Mystery Agency** is a collaborative detective game. A legendary thief — **the Red Fox** — has resurfaced, and the whole community works one case at a time: read the evidence, submit **one theory per chapter**, vote on the best theories, and the community's top pick becomes **canon** and drives the story forward. It plays out over a **ten-chapter** campaign, *The Red Fox Files* (Books One & Two).
 
 There is no hidden "right answer" checked by the game — **the community decides the truth by voting.** Your job is to make the most convincing case.
 
@@ -16,7 +16,7 @@ There is no hidden "right answer" checked by the game — **the community decide
 
 1. **Investigate** — On the **Evidence** screen, read the case briefing and every clue. Clues are tagged **EVIDENCE**, **TESTIMONY**, or **DOCUMENT**.
 2. **Submit a theory** — Tap **Submit Theory**. Choose a **type** (Suspect / Motive / Method / Prediction), write your theory (≤280 chars), and **tag the clues** that support it. → **+10 XP**.
-3. **Voting opens** — When a moderator opens the **voting** phase, everyone can upvote the theories they find most convincing on the **Community Theories** screen.
+3. **Voting opens** — Phases advance **automatically every 12 hours** (a moderator can also open voting instantly). Everyone can upvote the theories they find most convincing on the **Community Theories** screen. A live countdown shows time to the next phase.
 4. **Vote** — Upvote others' theories (not your own, not already-canon). → **+2 XP per vote you cast**, and the theory's author gets **+5 XP per vote received**.
 5. **Canon is selected** — A moderator selects the winning theory (usually the top-voted one). It becomes **canon**, earns its author **+100 XP**, and shapes the next chapter. A confetti celebration screen shows the winner.
 6. **Next chapter** — The moderator advances the story and the loop repeats, until the finale where you **predict who the Red Fox is**.
@@ -42,7 +42,7 @@ A moderator either **auto-selects** the highest-voted theory or picks one manual
 
 ## How chapters progress
 
-Chapters advance **manually**, by a moderator, once canon is chosen. Advancing reopens the **submission** phase for the new chapter. There are **five** chapters.
+Chapters advance **automatically** after the voting phase (top theory is canonized), or a moderator can advance manually. Advancing reopens the **submission** phase for the new chapter. There are **ten** chapters. You may submit **one theory per chapter** — choose it carefully.
 
 ---
 

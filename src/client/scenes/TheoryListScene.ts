@@ -3,6 +3,7 @@ import { Theory, VotingPhase } from '../../shared/types';
 import { XP_VALUES } from '../../shared/constants';
 import { ApiClient } from '../api';
 import { GlassCard, PremiumButton, Badge, SceneTransitions, ToastManager, ScrollView, COLORS } from '../components/UIComponents';
+import { phaseStatusLine, notifyPhaseChange } from '../phase';
 
 type TheoryRow = {
   theory: Theory;
@@ -49,6 +50,7 @@ export class TheoryListScene extends Scene {
       this.theories = response.theories;
       this.votingPhase = response.voting_phase;
       this.canonTheory = response.theories.find((t) => t.is_canon) ?? null;
+      notifyPhaseChange(this, response.voting_phase);
 
       loadingText.destroy();
       spinner.destroy();
@@ -72,12 +74,9 @@ export class TheoryListScene extends Scene {
     }).setOrigin(0.5);
 
     const phase = this.votingPhase?.phase;
-    const phaseText = phase === 'voting'
-      ? `🗳️ VOTING OPEN — Ends in ${this.getTimeRemaining(this.votingPhase!.ends_at)}`
-      : phase === 'submission'
-      ? '✍️ SUBMISSION PHASE — voting opens once a moderator starts it'
-      : '🔒 VOTING CLOSED';
     const phaseColor = phase === 'voting' ? '#22c55e' : phase === 'submission' ? '#f59e0b' : COLORS.textSecondary;
+    const chapterNum = this.votingPhase?.chapter_id ? this.votingPhase.chapter_id.replace('chapter', '') : '?';
+    const phaseText = this.votingPhase ? `📖 Chapter ${chapterNum}   ·   ${phaseStatusLine(this.votingPhase)}` : '';
     this.add.text(512, 78, phaseText, { fontSize: '14px', color: phaseColor, fontStyle: 'bold' }).setOrigin(0.5);
 
     PremiumButton.create(this, 66, 42, 92, 36, '← BACK', () => SceneTransitions.fade(this, 'EvidenceScene'), { color: 0x64748b, hoverColor: 0x94a3b8, fontSize: 14, glow: false });
@@ -112,6 +111,10 @@ export class TheoryListScene extends Scene {
       this.add.text(-400, 0, theory.author_username.charAt(0).toUpperCase(), { fontSize: '20px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5),
       this.add.text(-360, -40, theory.author_username, { fontSize: '15px', color: COLORS.text, fontStyle: 'bold' }).setOrigin(0, 0.5),
       Badge.create(this, -215, -40, theory.theory_type.toUpperCase(), 'default'),
+      // Chapter label so theories from different chapters are never confused.
+      this.add.text(-120, -40, `📖 CHAPTER ${theory.chapter_id.replace('chapter', '')}`, {
+        fontSize: '12px', color: '#38bdf8', fontStyle: 'bold',
+      }).setOrigin(0, 0.5),
       this.add.text(-360, 6, theory.content.substring(0, 150) + (theory.content.length > 150 ? '…' : ''), {
         fontSize: '14px', color: COLORS.textSecondary, wordWrap: { width: 640 }, lineSpacing: 2,
       }).setOrigin(0, 0.5),
@@ -161,14 +164,6 @@ export class TheoryListScene extends Scene {
       const message = error instanceof Error ? error.message : 'Failed to vote';
       ToastManager.show(this, message, 'error');
     }
-  }
-
-  private getTimeRemaining(endsAt: number): string {
-    const remaining = endsAt - Date.now();
-    if (remaining <= 0) return 'soon';
-    const hours = Math.floor(remaining / 3600000);
-    const minutes = Math.floor((remaining % 3600000) / 60000);
-    return `${hours}h ${minutes}m`;
   }
 
   shutdown() {

@@ -37,7 +37,7 @@ export class ApiClient {
     return this.request<{ chapter: Chapter | null }>('/chapter');
   }
 
-  static getTheories(): Promise<{ chapter: Chapter | null; theories: Theory[]; voting_phase: VotingPhase }> {
+  static getTheories(): Promise<{ chapter: Chapter | null; theories: Theory[]; voting_phase: VotingPhase; user_submitted: boolean }> {
     return this.request('/theories');
   }
 
@@ -69,13 +69,23 @@ export class ApiClient {
     adminAccess: boolean;
     phase: 'submission' | 'voting' | 'closed';
     chapterId: string | null;
+    voting_phase: VotingPhase;
+    chapterCount: number;
   }> {
     return this.request('/admin/status');
   }
 
   // --- Moderator-only (server enforces authorization; non-mods get 403) ---
-  static setVotingPhase(phase: 'submission' | 'voting' | 'closed'): Promise<{ message: string; phase: string }> {
+  static setVotingPhase(phase: 'submission' | 'voting' | 'closed'): Promise<{ message: string; voting_phase: VotingPhase }> {
     return this.request('/voting-phase', { method: 'POST', body: JSON.stringify({ phase }) });
+  }
+
+  static setPhaseAuto(auto: boolean): Promise<{ message: string; voting_phase: VotingPhase }> {
+    return this.request('/phase/auto', { method: 'POST', body: JSON.stringify({ auto }) });
+  }
+
+  static skipPhase(): Promise<{ message: string; voting_phase: VotingPhase }> {
+    return this.request('/phase/skip', { method: 'POST' });
   }
 
   static autoSelectCanon(): Promise<{ theory: Theory; message: string }> {

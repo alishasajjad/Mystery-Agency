@@ -1,6 +1,7 @@
 import { Scene, GameObjects, Math as PhaserMath } from 'phaser';
 import { PremiumButton, SceneTransitions, ToastManager, InfoModal, HOW_TO_PLAY_STEPS, COLORS } from '../components/UIComponents';
 import { ApiClient } from '../api';
+import { phaseStatusLine, notifyPhaseChange } from '../phase';
 
 export class MainMenu extends Scene {
   title: GameObjects.Text | null = null;
@@ -376,6 +377,8 @@ export class MainMenu extends Scene {
     try {
       const status = await ApiClient.getAdminStatus();
       if (!this.sys.isActive()) return; // scene already left
+      this.showPhaseBanner(phaseStatusLine(status.voting_phase), status.chapterId);
+      notifyPhaseChange(this, status.voting_phase);
       if (status.isModerator || localFlag) {
         this.showAdminButton(status.isModerator ? 'moderator' : 'dev');
       }
@@ -383,6 +386,15 @@ export class MainMenu extends Scene {
       console.error('Admin status check failed:', error);
       if (this.sys.isActive() && localFlag) this.showAdminButton('dev');
     }
+  }
+
+  private showPhaseBanner(statusLine: string, chapterId: string | null) {
+    const num = chapterId ? chapterId.replace('chapter', '') : '?';
+    const banner = this.add.text(512, 245, `CHAPTER ${num}   ·   ${statusLine}`, {
+      fontSize: '15px', color: COLORS.textSecondary, fontStyle: 'bold', align: 'center',
+      backgroundColor: '#0f172a', padding: { x: 14, y: 6 },
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, duration: 500 });
   }
 
   private showAdminButton(source: 'moderator' | 'dev') {

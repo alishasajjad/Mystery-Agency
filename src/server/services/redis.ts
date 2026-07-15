@@ -1,6 +1,6 @@
 import type { RedisClient } from '@devvit/web/server';
 import { REDIS_KEYS } from '../../shared/constants';
-import type { Chapter, Theory, User, VotingPhase, VotingPhaseName } from '../../shared/types';
+import type { Chapter, Theory, User, VotingPhaseName } from '../../shared/types';
 
 // NOTE: The Devvit `RedisClient` (v0.13.x) supports strings, hashes and sorted sets
 // only — there are no set commands (sAdd/sMembers/sIsMember). Membership collections
@@ -303,33 +303,72 @@ export async function getTopTheoryForChapter(redis: RedisClient, chapterId: stri
 }
 
 // ---------------------------------------------------------------------------
-// Voting Operations
+// Voting Operations (raw persistence — resolvePhase() in phase.ts adds the timer logic)
 // ---------------------------------------------------------------------------
-export async function getVotingPhase(redis: RedisClient): Promise<VotingPhase> {
+export type RawPhase = {
+  phase: VotingPhaseName;
+  endsAt: number;
+  startedAt: number;
+  auto: boolean;
+  chapterId: string | null;
+};
+
+export async function readPhase(redis: RedisClient): Promise<RawPhase> {
   try {
-    const active = await redis.get(REDIS_KEYS.VOTING_ACTIVE);
     const phase = await redis.get(REDIS_KEYS.VOTING_PHASE);
     const endsAt = await redis.get(REDIS_KEYS.VOTING_ENDS_AT);
-
+    const startedAt = await redis.get(REDIS_KEYS.VOTING_STARTED_AT);
+    const auto = await redis.get(REDIS_KEYS.VOTING_AUTO);
+    const chapterId = await redis.get(REDIS_KEYS.VOTING_CHAPTER);
     return {
-      active: active === 'true',
       phase: (phase as VotingPhaseName) || 'submission',
-      ends_at: endsAt ? parseInt(endsAt) : 0,
+      endsAt: endsAt ? parseInt(endsAt) : 0,
+      startedAt: startedAt ? parseInt(startedAt) : 0,
+      auto: auto !== 'false', // default ON
+      chapterId: chapterId || null,
     };
   } catch (error) {
-    console.error('Error in getVotingPhase:', error);
-    return { active: false, phase: 'closed', ends_at: 0 };
+    console.error('Error in readPhase:', error);
+    return { phase: 'closed', endsAt: 0, startedAt: 0, auto: false, chapterId: null };
   }
 }
 
-export async function setVotingPhase(redis: RedisClient, active: boolean, phase: VotingPhaseName, endsAt: number): Promise<void> {
+export async function writePhase(redis: RedisClient, raw: RawPhase): Promise<void> {
   try {
-    await redis.set(REDIS_KEYS.VOTING_ACTIVE, active ? 'true' : 'false');
-    await redis.set(REDIS_KEYS.VOTING_PHASE, phase);
-    await redis.set(REDIS_KEYS.VOTING_ENDS_AT, endsAt.toString());
+    await redis.set(REDIS_KEYS.VOTING_ACTIVE, raw.phase !== 'closed' ? 'true' : 'false');
+    await redis.set(REDIS_KEYS.VOTING_PHASE, raw.phase);
+    await redis.set(REDIS_KEYS.VOTING_ENDS_AT, raw.endsAt.toString());
+    await redis.set(REDIS_KEYS.VOTING_STARTED_AT, raw.startedAt.toString());
+    await redis.set(REDIS_KEYS.VOTING_AUTO, raw.auto ? 'true' : 'false');
+    await redis.set(REDIS_KEYS.VOTING_CHAPTER, raw.chapterId ?? '');
   } catch (error) {
-    console.error('Error in setVotingPhase:', error);
+    console.error('Error in writePhase:', error);
     throw error;
+  }
+}
+
+// --- One theory per chapter -------------------------------------------------
+export async function hasSubmittedForChapter(redis: RedisClient, chapterId: string, userId: string): Promise<boolean> {
+  try {
+    const existing = await redis.hGet(REDIS_KEYS.CHAPTER_AUTHORS(chapterId), userId);
+    return existing !== undefined && existing !== '';
+  } catch (error) {
+    console.error('Error in hasSubmittedForChapter:', error);
+    return false;
+  }
+}
+
+export async function recordChapterSubmission(redis: RedisClient, chapterId: string, userId: string, theoryId: string): Promise<void> {
+  await redis.hSet(REDIS_KEYS.CHAPTER_AUTHORS(chapterId), { [userId]: theoryId });
+}
+
+export async function clearChapterAuthors(redis: RedisClient, chapterId: string): Promise<void> {
+  try {
+    const authors = await redis.hGetAll(REDIS_KEYS.CHAPTER_AUTHORS(chapterId));
+    const ids = Object.keys(authors);
+    if (ids.length > 0) await redis.hDel(REDIS_KEYS.CHAPTER_AUTHORS(chapterId), ids);
+  } catch (error) {
+    console.error('Error in clearChapterAuthors:', error);
   }
 }
 
