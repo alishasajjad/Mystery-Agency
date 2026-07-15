@@ -187,6 +187,20 @@ The game stores only Reddit-account-linked gameplay data (username, XP, rank, ba
 
 Fair-play rules and usage terms are in **[terms.md](terms.md)**. By playing you agree not to cheat, spam, or abuse the game, and to follow Reddit's content policy.
 
+## 🎥 Demo Video
+
+Full gameplay demo here:
+
+https://www.reddit.com/user/mystery-agency
+
+## 🎮 Live App - Comming Soon
+
+https://developers.reddit.com/apps/mystery-agency
+
+## Demo Video 
+
+https://youtu.be/1CAu0JruiqY
+
 ## License
 
 BSD-3-Clause — see [LICENSE](LICENSE).
