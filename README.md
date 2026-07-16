@@ -80,30 +80,7 @@ flowchart LR
 - **Backend** (`src/server`) — a Hono app with `routes/` (HTTP transport, incl. Devvit menu/trigger endpoints) and `services/` (game logic: Redis access, XP/ranks/badges, auth, phase engine, story).
 - **Shared** (`src/shared`) — domain types and constants used by both sides.
 - **Data** — Redis hashes for users/chapters/theories and sorted sets for memberships and leaderboards (Devvit's Redis has no set commands, so memberships are timestamp-scored sorted sets).
-
-## Folder Structure
-
-```
-mystery-agency/
-├── src/
-│   ├── client/                     # Frontend (Phaser)
-│   │   ├── components/UIComponents.ts   # design system (buttons, cards, badges, toast, HUD, scroll, modal)
-│   │   ├── scenes/                      # Boot, Preloader, MainMenu, Evidence, Theory, Result,
-│   │   │                                # TheoryList, CanonResult, Leaderboard, Profile, Admin, Settings
-│   │   ├── phase.ts                     # phase formatting + notifications + chapter helpers
-│   │   ├── api.ts                       # typed API client
-│   │   ├── game.* / splash.*            # expanded game + inline feed entrypoints
-│   ├── server/                     # Backend (Hono)
-│   │   ├── routes/                      # api.ts, theories.ts, menu.ts, triggers.ts
-│   │   ├── services/                    # redis, xp, auth, phase, story-init, post
-│   │   └── index.ts                     # Hono composition + serve()
-│   └── shared/                     # Shared types & constants
-├── public/                         # static assets (snoo.png)
-├── tools/                          # TypeScript project-reference configs
-├── devvit.json · vite.config.ts · eslint.config.js · tsconfig.json
-├── README.md · GAME_OVERVIEW.md · privacy.md · terms.md · LICENSE
-```
-
+- 
 ## Tech Stack
 
 - **Engine:** Phaser 4 · **Language:** TypeScript · **Bundler:** Vite
